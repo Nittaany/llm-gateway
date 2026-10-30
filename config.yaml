@@ -1,0 +1,95 @@
+# ============================================================
+# LiteLLM Gateway — your multi-model routing brain
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+#
+# How to read this file:
+#   Each entry under model_list is ONE brain you can call by its
+#   model_name is the alias gateway clients request. Everything under
+#   litellm_params is where the request actually goes.
+#
+# Routing: free-workhorse uses Gemini Flash; premium uses Gemini Pro
+# with the configured fallbacks. Bedrock aliases route directly to Bedrock.
+# Provider pricing and quotas vary; an alias name does not guarantee free use.
+# ============================================================
+
+model_list:
+  # --- DEFAULT BRAIN: Gemini Flash (free tier, fast) -------------
+  - model_name: free-workhorse
+    litellm_params:
+      model: gemini/gemini-flash-latest # provider-maintained Flash alias
+      api_key: os.environ/GEMINI_API_KEY
+
+  # --- PAID BRAIN: Gemini Pro (use for hard tasks) ---------------
+  - model_name: premium
+    litellm_params:
+      model: gemini/gemini-3.1-pro-preview # pinned; gemini-pro-latest alias currently also serves Flash
+      api_key: os.environ/GEMINI_API_KEY
+
+  # -- PAID BRAIN: Bedrock (Anthropic Claude Sonnet & Opus) ----------
+  - model_name: bedrock-sonnet
+    litellm_params:
+      model: bedrock/global.anthropic.claude-sonnet-4-6
+      api_key: os.environ/AWS_BEARER_TOKEN_BEDROCK
+      aws_region_name: ap-southeast-2
+
+  - model_name: bedrock-opus
+    litellm_params:
+      model: bedrock/au.anthropic.claude-opus-4-6-v1
+      api_key: os.environ/AWS_BEARER_TOKEN_BEDROCK
+      aws_region_name: ap-southeast-2
+
+  # --- ADDITIONAL PROVIDER ROUTES (check billing and quota) ------
+  - model_name: free-openai
+    litellm_params:
+      model: openai/gpt-4o-mini # swap model name for newest cheap GPT
+      api_key: os.environ/OPENAI_API_KEY
+
+  - model_name: free-anthropic
+    litellm_params:
+      model: anthropic/claude-3-5-haiku-latest # swap for newest Haiku
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  - model_name: free-kimi
+    litellm_params:
+      model: moonshot/moonshot-v1-8k # swap for newer Kimi K2 models when ready
+      api_key: os.environ/MOONSHOT_API_KEY
+
+  # --- FREE-TIER ROUTES (provider terms and limits apply) --------
+  - model_name: free-glm
+    litellm_params:
+      model: zai/glm-4.7-flash # Z.ai GLM 4.7 Flash
+      api_key: os.environ/ZAI_API_KEY
+
+  - model_name: free-openrouter
+    litellm_params:
+      model: openrouter/nvidia/nemotron-3-ultra-550b-a55b:free # verified vs live catalog 2026-10-10; alt: thinkingmachines/inkling:free
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  # --- RETIRED: free-groq (Groq now gates API keys behind a $5 plan;
+  #     verified 2026-10-10 by signup attempt. Restore the block below
+  #     if that ever changes.)
+  # - model_name: free-groq
+  #   litellm_params:
+  #     model: groq/openai/gpt-oss-120b
+  #     api_key: os.environ/GROQ_API_KEY
+
+# --- ROUTING RULES ---------------------------------------------
+router_settings:
+  # Fallback ladder: paid tries first on "premium", then the free rotation.
+  # If Gemini rate-limits, GLM keeps you working — $0.
+  fallbacks:
+    - premium: [free-workhorse, free-glm]
+    - free-workhorse: [free-glm]
+  num_retries: 2
+  retry_after: 5
+
+# --- GATEWAY BEHAVIOR ------------------------------------------
+litellm_settings:
+  cache: true # identical prompts = cached response = 0 tokens spent
+  cache_params:
+    type: local # in-memory cache (no Redis server needed)
+  drop_params: true # ignore provider-unsupported params instead of erroring
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY # client key for gateway-connected harnesses
+  database_url: os.environ/DATABASE_URL # local Postgres → powers the /ui spend dashboard

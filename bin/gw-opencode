@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+# Launch OpenCode from the current project using the shared gateway config and keys.
+set -eo pipefail
+
+BIN_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+GATEWAY_DIR="$(cd -- "$BIN_DIR/.." && pwd -P)"
+
+if [[ ! -f "$GATEWAY_DIR/ai-env.sh" || ! -f "$GATEWAY_DIR/opencode.json" ]]; then
+  echo "ERROR: Gateway OpenCode setup is incomplete. Run gateway setup/sync first." >&2
+  exit 1
+fi
+
+if ! source "$GATEWAY_DIR/ai-env.sh" >/dev/null; then
+  echo "ERROR: Could not load gateway/.env." >&2
+  exit 1
+fi
+unset GATEWAY_API_KEY
+if [[ -z "${LITELLM_MASTER_KEY:-}" ]]; then
+  echo "ERROR: LITELLM_MASTER_KEY was not loaded from gateway/.env." >&2
+  exit 1
+fi
+
+HTTP_CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 3 \
+  http://127.0.0.1:4000/health/liveliness 2>/dev/null || true)"
+if [[ "$HTTP_CODE" != "200" ]]; then
+  echo "Gateway health is HTTP ${HTTP_CODE:-000}; asking launchd-safe controller to recover it..."
+  "$GATEWAY_DIR/start_gateway.sh"
+fi
+
+# V2 supports a custom config path. This avoids dependence on a test project's config.
+export OPENCODE_CONFIG="$GATEWAY_DIR/opencode.json"
+
+# Use the actual OpenCode executable, not a gateway script alias.
+OPENCODE_BIN="$(type -P opencode || true)"
+if [[ -z "$OPENCODE_BIN" ]]; then
+  echo "ERROR: 'opencode' executable not found in PATH." >&2
+  exit 127
+fi
+exec "$OPENCODE_BIN" "$@"

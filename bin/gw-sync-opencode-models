@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Refresh gateway/opencode.json from the live LiteLLM /v1/models inventory.
+set -eo pipefail
+BIN_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+GATEWAY_DIR="$(cd -- "$BIN_DIR/.." && pwd -P)"
+source "$GATEWAY_DIR/ai-env.sh" >/dev/null
+unset GATEWAY_API_KEY
+exec python3 "$GATEWAY_DIR/scripts/sync_opencode_models.py" --write

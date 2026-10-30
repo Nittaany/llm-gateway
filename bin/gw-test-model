@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Test a selected gateway alias via /v1/chat/completions.
+set -eo pipefail
+BIN_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+GATEWAY_DIR="$(cd -- "$BIN_DIR/.." && pwd -P)"
+source "$GATEWAY_DIR/ai-env.sh" >/dev/null
+unset GATEWAY_API_KEY
+exec python3 "$GATEWAY_DIR/scripts/test_model.py" "$@"
