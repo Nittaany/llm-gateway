@@ -1,172 +1,43 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "providers": {
-    "opencode": {
+  "model": "gateway/free-workhorse",
+  "provider": {
+    "gateway": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "My Gateway (LiteLLM)",
+      "options": {
+        "baseURL": "http://127.0.0.1:4000/v1",
+        "apiKey": "{env:LITELLM_MASTER_KEY}"
+      },
       "models": {
-        "gw-free-workhorse": {
-          "name": "Gemini Flash — Free Default",
-          "modelID": "free-workhorse",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "free-workhorse": {
+          "name": "Gemini Flash — Free Default"
         },
-        "gw-premium": {
-          "name": "Gemini Pro — Premium with Fallbacks",
-          "modelID": "premium",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "premium": {
+          "name": "Gemini Pro — Premium with Fallbacks"
         },
-        "gw-bedrock-sonnet": {
-          "name": "Claude Sonnet — Bedrock",
-          "modelID": "bedrock-sonnet",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "bedrock-sonnet": {
+          "name": "Claude Sonnet — Bedrock"
         },
-        "gw-bedrock-opus": {
-          "name": "Claude Opus — Bedrock",
-          "modelID": "bedrock-opus",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "bedrock-opus": {
+          "name": "Claude Opus — Bedrock"
         },
-        "gw-free-openai": {
-          "name": "OpenAI GPT-4o mini",
-          "modelID": "free-openai",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "free-openai": {
+          "name": "OpenAI GPT-4o mini"
         },
-        "gw-free-anthropic": {
-          "name": "Claude Haiku",
-          "modelID": "free-anthropic",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "free-anthropic": {
+          "name": "Claude Haiku"
         },
-        "gw-free-kimi": {
-          "name": "Moonshot Kimi",
-          "modelID": "free-kimi",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "free-kimi": {
+          "name": "Moonshot Kimi"
         },
-        "gw-free-glm": {
-          "name": "GLM Flash — Z.ai",
-          "modelID": "free-glm",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "free-glm": {
+          "name": "GLM Flash — Z.ai"
         },
-        "gw-free-openrouter": {
-          "name": "Nemotron — OpenRouter Free",
-          "modelID": "free-openrouter",
-          "package": "@opencode-ai/ai/providers/openai-compatible",
-          "settings": {
-            "baseURL": "http://127.0.0.1:4000/v1",
-            "apiKey": "{env:LITELLM_MASTER_KEY}"
-          },
-          "capabilities": {
-            "tools": true,
-            "input": [
-              "text"
-            ],
-            "output": [
-              "text"
-            ]
-          }
+        "free-openrouter": {
+          "name": "Nemotron — OpenRouter Free"
         }
       }
     }
-  },
-  "model": "opencode/gw-free-workhorse"
+  }
 }

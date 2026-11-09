@@ -30,13 +30,13 @@ model_list:
     litellm_params:
       model: bedrock/global.anthropic.claude-sonnet-4-6
       api_key: os.environ/AWS_BEARER_TOKEN_BEDROCK
-      aws_region_name: ap-southeast-2
+      aws_region_name: os.environ/AWS_REGION
 
   - model_name: bedrock-opus
     litellm_params:
       model: bedrock/au.anthropic.claude-opus-4-6-v1
       api_key: os.environ/AWS_BEARER_TOKEN_BEDROCK
-      aws_region_name: ap-southeast-2
+      aws_region_name: os.environ/AWS_REGION
 
   # --- ADDITIONAL PROVIDER ROUTES (check billing and quota) ------
   - model_name: free-openai
@@ -92,4 +92,5 @@ litellm_settings:
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY # client key for gateway-connected harnesses
-  database_url: os.environ/DATABASE_URL # local Postgres → powers the /ui spend dashboard
+  # Uncomment if you have PostgreSQL + prisma set up for spend tracking:
+  # database_url: os.environ/DATABASE_URL

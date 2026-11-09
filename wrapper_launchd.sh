@@ -3,13 +3,14 @@
 # wrapper_launchd.sh — what macOS launchd actually runs.
 # Jobs launchd can't do itself:
 #   1. Load keys from .env — SAFELY (tolerates spaces around '=',
-#      which naive `source` chokes on; bitten us twice: 2026-10-08 & 10)
+#      which naive `source` chokes on)
 #   2. Never crash-loop: if a healthy gateway already owns port
 #      4000, WAIT politely instead of fighting it.
 # ============================================================
 cd "$(dirname "$0")" || exit 1
 
 load_env() {
+  [ -f .env ] || return 1
   while IFS= read -r line; do
     case "$line" in
       \#*|"") continue ;;                              # skip comments and blanks
@@ -31,8 +32,8 @@ done
 
 load_env
 
-# Explicitly ensure your regional variables are ready for Bedrock
-export AWS_REGION="ap-southeast-2"
+# Default AWS_REGION if not set in .env (Bedrock routes need it)
+export AWS_REGION="${AWS_REGION:-ap-southeast-2}"
 
 echo "🚀 launchd background agent starting LiteLLM..."
 exec ./venv/bin/litellm --config config.yaml --host 127.0.0.1 --port 4000

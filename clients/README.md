@@ -1,6 +1,8 @@
-# Coding Harness Clients — Shared LiteLLM Gateway
+# Coding Harness Clients — LiteLLM Gateway
 
-This guide explains how client applications connect to the one gateway in `~/dev/ai-ops/gateway`. It intentionally uses the generic term **harness** for the graphical/IDE client.
+This guide explains how client applications connect to the gateway. It intentionally uses the generic term **harness** for the graphical/IDE client.
+
+> **Note:** All paths below are relative to the gateway root directory (where you cloned the repo). Run commands from that directory, or substitute your actual path.
 
 ## The rule: clients use the gateway key, not upstream provider keys
 
@@ -16,13 +18,15 @@ The endpoint currently binds to `127.0.0.1:4000`; these clients must be running 
 
 ## OpenCode V2
 
-Use the central config, generated from the live LiteLLM `/v1/models` response. Run OpenCode from the project directory you want it to work on:
+Use the central config, generated from the live LiteLLM `/v1/models` response. Run OpenCode from the project directory you want it to work on.
+
+If you add the gateway's `bin/` directory to your `PATH`, you can run these from anywhere:
 
 ```bash
-"$HOME/dev/ai-ops/gateway/bin/gw-opencode"
-"$HOME/dev/ai-ops/gateway/bin/gw-opencode" models
-"$HOME/dev/ai-ops/gateway/bin/gw-opencode" run \
-  --model opencode/gw-free-workhorse \
+bin/gw-opencode
+bin/gw-opencode models
+bin/gw-opencode run \
+  --model gateway/free-workhorse \
   "Reply with exactly: OK"
 ```
 
@@ -47,30 +51,29 @@ The prefix `gw-` is only a client-side name. `config.yaml` continues to use the 
 
 ```bash
 # Show the current LiteLLM aliases
-"$HOME/dev/ai-ops/gateway/bin/gw-models"
+bin/gw-models
 
 # Refresh OpenCode's generated config after changing config.yaml and restarting LiteLLM
-"$HOME/dev/ai-ops/gateway/bin/gw-sync-opencode-models"
+bin/gw-sync-opencode-models
 
 # Test the alias through /v1/chat/completions
-"$HOME/dev/ai-ops/gateway/bin/gw-test-model" free-workhorse
-"$HOME/dev/ai-ops/gateway/bin/gw-test-model" bedrock-opus
+bin/gw-test-model free-workhorse
+bin/gw-test-model bedrock-opus
 ```
 
 A catalogue entry does not prove provider authentication, quota, price, or tool compatibility. Test a real request. Tool support should be tested separately before using a model for coding operations.
 
 ### If OpenCode says `No api key passed in`
 
-The recovery sequence that worked in the recorded setup was:
+The recovery sequence:
 
 ```bash
-GW="$HOME/dev/ai-ops/gateway"
-source "$GW/ai-env.sh" >/dev/null
+source ai-env.sh >/dev/null
 unset GATEWAY_API_KEY
-"$GW/bin/gw-opencode" service status
-"$GW/bin/gw-opencode" service restart
-"$GW/bin/gw-opencode" run \
-  --model opencode/gw-free-workhorse \
+bin/gw-opencode service status
+bin/gw-opencode service restart
+bin/gw-opencode run \
+  --model gateway/free-workhorse \
   "Reply with exactly: OPENCODE_GATEWAY_OK"
 ```
 
@@ -101,10 +104,10 @@ The application may display a provider-prefixed reference such as `new-provider/
 
 ### Copy the gateway key without printing it
 
-Run this locally in Terminal, then paste from the clipboard into the GUI client's API-key field:
+Run this from the gateway directory, then paste from the clipboard into the GUI client's API-key field:
 
 ```bash
-source "$HOME/dev/ai-ops/gateway/ai-env.sh" >/dev/null
+source ai-env.sh >/dev/null
 printf %s "$LITELLM_MASTER_KEY" | pbcopy
 ```
 

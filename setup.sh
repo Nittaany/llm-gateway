@@ -1,0 +1,270 @@
+#!/usr/bin/env bash
+# ===========================================================================
+# setup.sh — First-time setup for the LiteLLM AI Gateway
+#
+#   git clone <repo> && cd llm-gateway && ./setup.sh
+#
+# What it does:
+#   1. Checks macOS + Python 3.9+ prerequisites
+#   2. Creates a Python virtual environment and installs LiteLLM
+#   3. Walks you through provider API key entry
+#   4. Generates .env and a macOS LaunchAgent
+#   5. Starts the gateway and verifies health
+#
+# Safe to re-run — detects existing configuration and asks before overwriting.
+# ===========================================================================
+set -eo pipefail
+
+GATEWAY_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+cd "$GATEWAY_DIR"
+
+# --- Helpers ---------------------------------------------------------------
+if [ -t 1 ] && [ "${TERM:-dumb}" != "dumb" ]; then
+  _G=$'\033[32m' _R=$'\033[31m' _Y=$'\033[33m' _C=$'\033[36m' _B=$'\033[1m' _0=$'\033[0m'
+else
+  _G='' _R='' _Y='' _C='' _B='' _0=''
+fi
+info()  { printf '  %s✓%s %s\n' "$_G" "$_0" "$1"; }
+warn()  { printf '  %s!%s %s\n' "$_Y" "$_0" "$1"; }
+fail()  { printf '  %s✗ %s%s\n' "$_R" "$1" "$_0" >&2; exit 1; }
+step()  { printf '\n%s%s%s\n' "$_B$_C" "$1" "$_0"; }
+
+# === 1. Preflight ===========================================================
+printf '\n%s  LiteLLM AI Gateway — Setup%s\n' "$_B" "$_0"
+
+step "Checking requirements"
+
+[[ "$(uname -s)" == "Darwin" ]] || fail "This setup is for macOS. Detected: $(uname -s)"
+info "macOS $(sw_vers -productVersion)"
+
+PYTHON=""
+for cmd in python3 python; do
+  if command -v "$cmd" >/dev/null 2>&1; then
+    ver="$("$cmd" -c 'import sys; v=sys.version_info; print(f"{v.major}.{v.minor}")' 2>/dev/null || true)"
+    major="${ver%%.*}"; minor="${ver#*.}"
+    if [ "${major:-0}" -ge 3 ] && [ "${minor:-0}" -ge 9 ]; then
+      PYTHON="$cmd"; break
+    fi
+  fi
+done
+[ -n "$PYTHON" ] || fail "Python 3.9+ required. Install with: brew install python3"
+info "Python $ver ($(command -v "$PYTHON"))"
+
+command -v curl >/dev/null || fail "curl is required but not found."
+info "curl available"
+
+# === 2. Python environment ===================================================
+step "Python environment"
+
+if [ -d "$GATEWAY_DIR/venv" ] && [ -x "$GATEWAY_DIR/venv/bin/python" ]; then
+  info "Virtual environment already exists"
+else
+  printf '  Creating virtual environment...\n'
+  "$PYTHON" -m venv "$GATEWAY_DIR/venv"
+  info "Virtual environment created"
+fi
+
+printf '  Installing LiteLLM (this may take a minute)...\n'
+"$GATEWAY_DIR/venv/bin/pip" install --quiet --upgrade pip >/dev/null 2>&1
+"$GATEWAY_DIR/venv/bin/pip" install --quiet 'litellm[proxy]' >/dev/null 2>&1
+LITELLM_VER="$("$GATEWAY_DIR/venv/bin/litellm" --version 2>/dev/null || echo 'unknown')"
+info "LiteLLM installed ($LITELLM_VER)"
+
+# === 3. Provider configuration (.env) ========================================
+step "Provider configuration"
+
+SKIP_ENV=false
+if [ -f "$GATEWAY_DIR/.env" ]; then
+  printf '\n  Existing .env found.\n'
+  printf '    %s[1]%s Reconfigure (backs up current .env)\n' "$_C" "$_0"
+  printf '    %s[2]%s Keep existing and skip to service setup\n' "$_C" "$_0"
+  printf '  Choice [2]: '
+  read -r env_choice
+  if [ "${env_choice:-2}" = "1" ]; then
+    cp "$GATEWAY_DIR/.env" "$GATEWAY_DIR/.env.backup-$(date +%Y%m%d-%H%M%S)"
+    info "Current .env backed up"
+  else
+    SKIP_ENV=true
+    info "Keeping existing .env"
+  fi
+fi
+
+if [ "$SKIP_ENV" = false ]; then
+  printf '\n  Enter API keys for providers you want to use.\n'
+  printf '  Press Enter to skip any you don'\''t have.\n'
+
+  MASTER_KEY="sk-$(openssl rand -hex 24)"
+
+  _KEY=""
+  ask_key() {
+    _KEY=""
+    printf '\n  %s%s%s' "$_B" "$1" "$_0"
+    [ -n "${2:-}" ] && printf ' (%s)' "$2"
+    printf ':\n    API key: '
+    read -r -s _KEY; printf '\n'
+    if [ -n "$_KEY" ]; then
+      printf '    %s✓%s set\n' "$_G" "$_0"; return 0
+    fi
+    printf '    %s— skipped%s\n' "$_Y" "$_0"; return 1
+  }
+
+  GK="" BK="" OK="" AK="" MK="" ZK="" RK=""
+  AWS_REGION_VAL="ap-southeast-2"
+
+  ask_key "Google Gemini"     "free-workhorse + premium"    && GK="$_KEY" || true
+  if ask_key "Amazon Bedrock" "bedrock-sonnet + bedrock-opus"; then
+    BK="$_KEY"
+    printf '    AWS region [ap-southeast-2]: '
+    read -r region_in
+    [ -n "$region_in" ] && AWS_REGION_VAL="$region_in"
+    info "Region: $AWS_REGION_VAL"
+  fi
+  ask_key "OpenAI"            "free-openai"                 && OK="$_KEY" || true
+  ask_key "Anthropic"         "free-anthropic"              && AK="$_KEY" || true
+  ask_key "Moonshot / Kimi"   "free-kimi"                   && MK="$_KEY" || true
+  ask_key "Z.ai (GLM)"       "free-glm"                    && ZK="$_KEY" || true
+  ask_key "OpenRouter"        "free-openrouter"             && RK="$_KEY" || true
+
+  configured=0
+  for v in "$GK" "$BK" "$OK" "$AK" "$MK" "$ZK" "$RK"; do
+    [ -n "$v" ] && configured=$((configured + 1))
+  done
+
+  cat > "$GATEWAY_DIR/.env" <<ENV_EOF
+# LiteLLM Gateway — generated by setup.sh on $(date +%Y-%m-%d)
+LITELLM_MASTER_KEY=$MASTER_KEY
+
+# Google Gemini
+GEMINI_API_KEY=$GK
+
+# Amazon Bedrock
+AWS_BEARER_TOKEN_BEDROCK=$BK
+AWS_REGION=$AWS_REGION_VAL
+
+# OpenAI
+OPENAI_API_KEY=$OK
+
+# Anthropic
+ANTHROPIC_API_KEY=$AK
+
+# Moonshot / Kimi
+MOONSHOT_API_KEY=$MK
+
+# Z.ai / GLM
+ZAI_API_KEY=$ZK
+
+# OpenRouter
+OPENROUTER_API_KEY=$RK
+
+# Optional: PostgreSQL for LiteLLM spend dashboard (requires prisma)
+# DATABASE_URL=postgresql://localhost:5432/litellm
+ENV_EOF
+  info ".env written — $configured of 7 providers configured"
+fi
+
+
+# === 4. macOS LaunchAgent ====================================================
+step "macOS background service"
+
+SANITIZED_USER="$(whoami | tr -cd 'A-Za-z0-9._-')"
+LABEL="com.${SANITIZED_USER}.litellm-gateway"
+printf '%s' "$LABEL" > "$GATEWAY_DIR/.launchd-label"
+info "Service label: $LABEL"
+
+PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
+DOMAIN="gui/$(id -u)"
+TARGET="$DOMAIN/$LABEL"
+
+# Stop existing service if registered
+if launchctl print "$TARGET" >/dev/null 2>&1; then
+  printf '  Stopping existing service...\n'
+  launchctl bootout "$TARGET" 2>/dev/null || true
+  sleep 2
+fi
+
+# Wait for port 4000 to clear
+for _w in $(seq 1 10); do
+  [ -z "$(lsof -tiTCP:4000 -sTCP:LISTEN 2>/dev/null || true)" ] && break
+  sleep 1
+done
+
+# Generate plist
+mkdir -p "$HOME/Library/LaunchAgents"
+cat > "$PLIST" <<PLIST_EOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>${LABEL}</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/bin/bash</string>
+    <string>${GATEWAY_DIR}/wrapper_launchd.sh</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>${GATEWAY_DIR}</string>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>KeepAlive</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>${GATEWAY_DIR}/gateway.log</string>
+  <key>StandardErrorPath</key>
+  <string>${GATEWAY_DIR}/gateway.log</string>
+</dict>
+</plist>
+PLIST_EOF
+
+plutil -lint "$PLIST" >/dev/null || fail "Generated plist failed validation."
+info "LaunchAgent installed: $PLIST"
+
+# Start the service
+printf '  Starting gateway'
+launchctl bootstrap "$DOMAIN" "$PLIST" 2>/dev/null \
+  || launchctl load "$PLIST" 2>/dev/null || true
+
+HEALTHY=false
+for _h in $(seq 1 30); do
+  CODE="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 2 \
+    http://127.0.0.1:4000/health/liveliness 2>/dev/null || true)"
+  [ "$CODE" = "200" ] && { HEALTHY=true; break; }
+  printf '.'; sleep 1
+done
+printf '\n'
+
+if [ "$HEALTHY" = true ]; then
+  PID="$(lsof -tiTCP:4000 -sTCP:LISTEN 2>/dev/null | head -1 || true)"
+  info "Gateway healthy on http://127.0.0.1:4000 (PID ${PID:-?})"
+else
+  warn "Gateway not healthy yet — check: tail -n 40 gateway.log"
+fi
+
+# === 5. OpenCode sync (if available) =========================================
+if [ "$HEALTHY" = true ] && command -v opencode >/dev/null 2>&1; then
+  step "OpenCode integration"
+  source "$GATEWAY_DIR/ai-env.sh" >/dev/null 2>&1 || true
+  unset GATEWAY_API_KEY 2>/dev/null || true
+  if "$GATEWAY_DIR/venv/bin/python3" \
+     "$GATEWAY_DIR/scripts/sync_opencode_models.py" --write >/dev/null 2>&1; then
+    info "Model catalogue synced to opencode.json"
+  else
+    warn "Sync failed — run bin/gw-sync-opencode-models later"
+  fi
+fi
+
+# === 6. Summary ==============================================================
+step "Setup complete!"
+printf '\n'
+printf '  %sQuick start:%s\n' "$_B" "$_0"
+printf '    bin/gw-models                  List model aliases\n'
+printf '    bin/gw-test-model <alias>      Smoke-test a model\n'
+printf '    bin/gw-opencode                Launch OpenCode via gateway\n'
+printf '\n  %sManagement:%s\n' "$_B" "$_0"
+printf '    ./start_gateway.sh             Check / recover the gateway\n'
+printf '    tail -f gateway.log            Watch runtime logs\n'
+printf '    ./setup.sh                     Reconfigure providers\n'
+printf '    ./uninstall.sh                 Remove the background service\n'
+printf '\n'
+
